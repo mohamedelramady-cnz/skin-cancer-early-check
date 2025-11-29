@@ -35,35 +35,42 @@ if uploaded:
     img = Image.open(uploaded).convert("RGB")
     st.image(img, caption="Input Image", use_column_width=True)
 
-    # Option for user to generate Grad-CAM
-    generate_gradcam_option = st.checkbox("Generate Grad-CAM visualization?")
-
     with st.spinner("Predicting..."):
-        # Step 1: Predict
-        pred = predict_class(model, img)
-
-        # Step 2: Grad-CAM (only if checkbox is checked)
-        gradcam_img = None
-        if generate_gradcam_option:
-            gradcam_img = generate_gradcam(model, img, pred["preprocessed"], pred_idx=pred["pred_index"])
+        result = infer_and_gradcam(model, img)  # or your prediction function
 
     # ---------------------------
-    # Display Results
+    # Display Prediction
     # ---------------------------
+    st.write(f"**Prediction:** {result['label']}")
+    st.write(f"**Probability:** {result['probability']:.4f}")
+
+    # Optional Grad-CAM
+    if st.checkbox("Generate Grad-CAM visualization?"):
+        st.subheader("Grad-CAM")
+        st.image(result["gradcam_img"], use_column_width=True)
+
+    # ---------------------------
+    # Dynamic Prediction Report
+    # ---------------------------
+    # Here you add the report & probability chart
+    class_names = list(result["all_probs"].keys())      # dict keys of all classes
+    probs = list(result["all_probs"].values())         # dict values
+    pred = {"pred_index": np.argmax(probs)}            # predicted index
+    gradcam_img = result.get("gradcam_img", None)      # grad-cam image if exists
+
     st.subheader("Prediction Report")
-    st.markdown(pred["report"])
+    report_text = ""
+    for i, name in enumerate(class_names):
+        prob = float(probs[i])
+        if i == pred["pred_index"]:
+            report_text += f"**➡ {name}: {prob:.4f}**  \n"
+        else:
+            report_text += f"{name}: {prob:.4f}  \n"
 
-    # Grad-CAM display
-    if gradcam_img is not None:
-        st.subheader("Grad-CAM Visualization")
-        st.image(gradcam_img, use_column_width=True)
+    st.markdown(report_text)
 
-    # ---------------------------
-    # Probability Bar Chart
-    # ---------------------------
     st.subheader("Class Probabilities")
-    probs = model.predict(pred["preprocessed"])[0]
-    class_names = list(CLASS_INDICES.values())
-
-    prob_dict = {name: float(prob) for name, prob in zip(class_names, probs)}
-    st.bar_chart(prob_dict)
+    import pandas as pd
+    df_probs = pd.DataFrame({"Class": class_names, "Probability": probs})
+    df_probs = df_probs.sort_values("Probability", ascending=False)
+    st.bar_chart(df_probs.set_index("Class"))
