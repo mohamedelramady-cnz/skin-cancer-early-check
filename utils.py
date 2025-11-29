@@ -1,74 +1,50 @@
-import numpy as np
-import tensorflow as tf
+import streamlit as st
 from PIL import Image
-import cv2
+import os
+import gdown
+import tensorflow as tf
 
-CLASS_INDICES = {0: "Cancer", 1: "Nevus", 2: "Benign"}
+from utils import predict_class, generate_gradcam
 
-def preprocess(pil_img, size=(224, 224)):
-    pil_img = pil_img.resize(size)
-    arr = np.array(pil_img) / 255.0
-    arr = np.expand_dims(arr, axis=0)
-    return arr
+# ---------------------------
+# Download & load model
+# ---------------------------
+FILE_ID = "1thbvn-z9RqusPlNURPy7rmIRnWM3k3c2"
+MODEL_PATH = "final_resnet_model.keras"
+URL = f"https://drive.google.com/uc?export=download&id={FILE_ID}"
 
-def overlay_heatmap(pil_img, heatmap, alpha=0.4):
-    img = np.array(pil_img)
-    heatmap_uint8 = np.uint8(255 * heatmap)
-    heatmap_color = cv2.applyColorMap(heatmap_uint8, cv2.COLORMAP_JET)
-    heatmap_color = cv2.cvtColor(heatmap_color, cv2.COLOR_BGR2RGB)
-    overlay = heatmap_color * alpha + img * (1 - alpha)
-    overlay = np.uint8(np.clip(overlay, 0, 255))
-    return Image.fromarray(overlay)
+@st.cache_resource
+def load_model():
+    if not os.path.exists(MODEL_PATH):
+        gdown.download(URL, MODEL_PATH, quiet=False)
+    model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+    return model
 
-def find_last_conv_layer(model):
-    if isinstance(model, tf.keras.Model):
-        for layer in reversed(model.layers):
-            if isinstance(layer, tf.keras.Model):
-                conv_layer = find_last_conv_layer(layer)
-                if conv_layer is not None:
-                    return conv_layer
-            elif isinstance(layer, tf.keras.layers.Conv2D):
-                return layer
-    return None
+model = load_model()
 
+# ---------------------------
+# Streamlit UI
+# ---------------------------
+st.title("AI-Based Skin Cancer Diagnosis System")
+st.write("Upload a skin lesion image to get prediction and Grad-CAM visualization.")
 
-def make_gradcam_heatmap(img_array, model, pred_index=None):
-    last_conv_layer = find_last_conv_layer(model)
-    grad_model = tf.keras.models.Model(
-    inputs=model.inputs,
-    outputs=[last_conv_layer.output, model.output])
+uploaded = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
 
+if uploaded:
+    img = Image.open(uploaded).convert("RGB")
+    st.image(img, caption="Input Image", use_column_width=True)
 
-    img_tensor = tf.convert_to_tensor(img_array, dtype=tf.float32)
-    conv_outputs, predictions = grad_model(img_tensor)
+    # Predict first
+    with st.spinner("Predicting class..."):
+        result = predict_class(model, img)
 
-    with tf.GradientTape() as tape:
-        conv_outputs, predictions = grad_model(img_tensor)
-        if pred_index is None:
-            pred_index = tf.argmax(predictions[0])
-        class_channel = predictions[:, pred_index]
+    st.write(f"**Prediction:** {result['label']}")
+    st.write(f"**Probability:** {result['probability']:.4f}")
+    st.info(result['report'])
 
-    grads = tape.gradient(class_channel, conv_outputs)
-    pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
-
-    conv_outputs = conv_outputs[0]
-    heatmap = conv_outputs @ pooled_grads[..., tf.newaxis]
-    heatmap = tf.squeeze(heatmap)
-    heatmap = tf.maximum(heatmap, 0) / (tf.math.reduce_max(heatmap) + 1e-10)
-    heatmap = heatmap.numpy()
-    heatmap = cv2.resize(heatmap, (img_array.shape[2], img_array.shape[1]))
-    return heatmap
-
-def infer_and_gradcam(model, pil_img):
-    x = preprocess(pil_img)
-    preds = model.predict(x)[0]
-    idx = int(np.argmax(preds))
-
-    heatmap = make_gradcam_heatmap(x, model, pred_index=idx)
-    grad_img = overlay_heatmap(pil_img, heatmap)
-
-    return {
-        "label": CLASS_INDICES.get(idx, str(idx)),
-        "probability": float(preds[idx]),
-        "gradcam_img": grad_img
-    }
+    # Show Grad-CAM button
+    if st.button("Show Grad-CAM"):
+        with st.spinner("Generating Grad-CAM..."):
+            gradcam_img = generate_gradcam(model, img, result['preprocessed'], pred_idx=None)
+        st.subheader("Grad-CAM")
+        st.image(gradcam_img, use_column_width=True)
