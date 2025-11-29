@@ -5,7 +5,7 @@ import os
 import gdown
 import tensorflow as tf
 
-from utils import preprocess, infer_and_gradcam
+from utils import infer_and_integrated_gradients
 
 # -------------------------------------------------
 # Google Drive model download
@@ -36,7 +36,7 @@ if uploaded:
     st.image(img, caption="Input Image", use_column_width=True)
 
     with st.spinner("Predicting..."):
-        result = infer_and_gradcam(model, img)
+        result = infer_and_integrated_gradients(model, img)
 
     st.write(f"**Prediction:** {result['label']}")
     st.write(f"**Probability:** {result['probability']:.4f}")
