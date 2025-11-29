@@ -1,53 +1,24 @@
-import numpy as np
 from PIL import Image
+import numpy as np
 import tensorflow as tf
 import cv2
 
-# Update class labels to match your training
 CLASS_INDICES = {
     0: "Cancer",
     1: "Nevus",
     2: "Benign"
 }
 
-# ---------------------------
-# Preprocessing
-# ---------------------------
 def preprocess(pil_img, size=(224, 224)):
     pil_img = pil_img.resize(size)
     arr = np.array(pil_img) / 255.0
     arr = np.expand_dims(arr, axis=0)
     return arr
 
-# ---------------------------
-# Prediction + report
-# ---------------------------
-def predict_class(model, pil_img):
-    x = preprocess(pil_img)
-    preds = model.predict(x)[0]
-    pred_idx = int(np.argmax(preds))
-    pred_label = CLASS_INDICES[pred_idx]
-    pred_prob = float(preds[pred_idx])
-
-    # Create a simple report
-    report = f"The model predicts this image as **{pred_label}** " \
-             f"with probability **{pred_prob:.4f}**."
-
-    return {
-        "pred_index": pred_idx,
-        "label": pred_label,
-        "probability": pred_prob,
-        "preprocessed": x,
-        "report": report
-    }
-
-# ---------------------------
-# Grad-CAM (generate after prediction)
-# ---------------------------
 def find_last_conv_layer(model):
     for layer in reversed(model.layers):
         if isinstance(layer, tf.keras.Model):
-            conv_layer = find_last_conv_layer(layer)
+            conv_layer = find_last_conv_layer(layer)  # recursive
             if conv_layer is not None:
                 return conv_layer
         elif isinstance(layer, tf.keras.layers.Conv2D):
@@ -56,8 +27,7 @@ def find_last_conv_layer(model):
 
 def make_gradcam_heatmap(img_array, model, pred_index=None):
     last_conv = find_last_conv_layer(model)
-    grad_model = tf.keras.models.Model([model.inputs],
-                                       [last_conv.output, model.output])
+    grad_model = tf.keras.models.Model([model.inputs], [last_conv.output, model.output])
 
     with tf.GradientTape() as tape:
         conv_outputs, predictions = grad_model(img_array)
@@ -85,7 +55,20 @@ def overlay_heatmap(pil_img, heatmap, alpha=0.4):
     overlay = np.uint8(np.clip(overlay, 0, 255))
     return Image.fromarray(overlay)
 
-def generate_gradcam(model, pil_img, preprocessed_img, pred_idx=None):
-    heatmap = make_gradcam_heatmap(preprocessed_img, model, pred_index=pred_idx)
-    gradcam_img = overlay_heatmap(pil_img, heatmap)
-    return gradcam_img
+def infer_and_gradcam(model, pil_img):
+    x = preprocess(pil_img)
+    preds = model.predict(x)[0]
+    idx = int(np.argmax(preds))
+
+    heatmap = make_gradcam_heatmap(x, model, pred_index=idx)
+    grad_img = overlay_heatmap(pil_img, heatmap)
+
+    all_probs = {CLASS_INDICES[i]: float(preds[i]) for i in range(len(preds))}
+
+    return {
+        "label": CLASS_INDICES.get(idx, str(idx)),
+        "probability": float(preds[idx]),
+        "gradcam_img": grad_img,
+        "all_probs": all_probs
+    }
+
