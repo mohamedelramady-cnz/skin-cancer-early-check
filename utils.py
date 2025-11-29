@@ -3,24 +3,14 @@ import tensorflow as tf
 from PIL import Image
 import cv2
 
-# ---------------------------
-# Class labels (match your model training)
-# ---------------------------
-CLASS_INDICES = {
-    0: "Cancer",
-    1: "Melanocytic Nevus",
-    2: "Benign – Other"
-}
+CLASS_INDICES = {0: "Cancer", 1: "Nevus", 2: "Benign"}
 
-# ---------------------------
-# Preprocessing
-# ---------------------------
 def preprocess(pil_img, size=(224, 224)):
     pil_img = pil_img.resize(size)
     arr = np.array(pil_img) / 255.0
     arr = np.expand_dims(arr, axis=0)
     return arr
-# ------------------
+
 def overlay_heatmap(pil_img, heatmap, alpha=0.4):
     img = np.array(pil_img)
     heatmap_uint8 = np.uint8(255 * heatmap)
@@ -30,9 +20,6 @@ def overlay_heatmap(pil_img, heatmap, alpha=0.4):
     overlay = np.uint8(np.clip(overlay, 0, 255))
     return Image.fromarray(overlay)
 
-# ---------------------------
-# Find last Conv2D layer inside a nested Functional model
-# ---------------------------
 def find_last_conv_layer(model):
     for layer in reversed(model.layers):
         if isinstance(layer, tf.keras.layers.Conv2D):
@@ -42,10 +29,6 @@ def find_last_conv_layer(model):
             if conv is not None:
                 return conv
     return None
-
-# ---------------------------
-# Grad-CAM heatmap
-# ---------------------------
 
 def make_gradcam_heatmap(img_array, model, pred_index=None):
     last_conv_layer = find_last_conv_layer(model)
@@ -75,7 +58,6 @@ def make_gradcam_heatmap(img_array, model, pred_index=None):
     heatmap = heatmap.numpy()
     heatmap = cv2.resize(heatmap, (img_array.shape[2], img_array.shape[1]))
     return heatmap
-# ---------------------------
 
 def infer_and_gradcam(model, pil_img):
     x = preprocess(pil_img)
