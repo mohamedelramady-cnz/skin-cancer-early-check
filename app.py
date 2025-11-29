@@ -4,8 +4,7 @@ import os
 import gdown
 import tensorflow as tf
 import numpy as np
-
-from utils import predict_class, generate_gradcam, CLASS_INDICES
+from utils import infer_and_gradcam
 
 # -------------------------------------------------
 # Google Drive model download
