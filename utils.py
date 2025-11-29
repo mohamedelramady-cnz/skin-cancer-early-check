@@ -23,11 +23,19 @@ def preprocess(pil_img, size=(224, 224)):
 # ---------------------------
 # Grad-CAM
 # ---------------------------
+# inside utils.py
 def find_last_conv_layer(model):
+    # Look inside nested models
     for layer in reversed(model.layers):
-        if isinstance(layer, tf.keras.layers.Conv2D):
-            return layer.name
-    raise ValueError("No Conv2D layer found.")
+        if isinstance(layer, tf.keras.Model):
+            # Check inside nested model
+            conv_layer = find_last_conv_layer(layer)
+            if conv_layer is not None:
+                return conv_layer
+        elif isinstance(layer, tf.keras.layers.Conv2D):
+            return layer
+    return None
+
 
 
 def make_gradcam_heatmap(img_array, model, pred_index=None):
