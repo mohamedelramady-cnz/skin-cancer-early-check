@@ -37,13 +37,25 @@ def find_last_conv_layer(model):
 # Grad-CAM heatmap
 # ---------------------------
 def make_gradcam_heatmap(img_array, model, pred_index=None):
-    last_conv_layer = find_last_conv_layer(model)
-    if last_conv_layer is None:
-        raise ValueError("No Conv2D layer found in the model for Grad-CAM.")
+    # Access the base ResNet model inside your model
+    try:
+        base_resnet = model.get_layer("resnet50")  # your base model name
+    except ValueError:
+        raise ValueError("Base ResNet50 model not found inside your model.")
 
+    # Find the last Conv2D inside ResNet
+    last_conv_layer = None
+    for layer in reversed(base_resnet.layers):
+        if isinstance(layer, tf.keras.layers.Conv2D):
+            last_conv_layer = layer
+            break
+    if last_conv_layer is None:
+        raise ValueError("No Conv2D layer found inside ResNet50.")
+
+    # Build a grad model
     grad_model = tf.keras.models.Model(
-        [model.inputs],
-        [last_conv_layer.output, model.output]
+        inputs=model.inputs,
+        outputs=[last_conv_layer.output, model.output]
     )
 
     img_tensor = tf.convert_to_tensor(img_array, dtype=tf.float32)
@@ -60,11 +72,11 @@ def make_gradcam_heatmap(img_array, model, pred_index=None):
     conv_outputs = conv_outputs[0]
     heatmap = conv_outputs @ pooled_grads[..., tf.newaxis]
     heatmap = tf.squeeze(heatmap)
-    heatmap = tf.maximum(heatmap, 0) / tf.math.reduce_max(heatmap)
+    heatmap = tf.maximum(heatmap, 0) / (tf.math.reduce_max(heatmap) + 1e-10)
     heatmap = heatmap.numpy()
     heatmap = cv2.resize(heatmap, (img_array.shape[2], img_array.shape[1]))
-
     return heatmap
+
 
 # ---------------------------
 # Overlay Grad-CAM on image
