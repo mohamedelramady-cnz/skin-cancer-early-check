@@ -21,26 +21,26 @@ def overlay_heatmap(pil_img, heatmap, alpha=0.4):
     return Image.fromarray(overlay)
 
 def find_last_conv_layer(model):
-    for layer in reversed(model.layers):
-        if isinstance(layer, tf.keras.layers.Conv2D):
-            return layer
-        elif isinstance(layer, tf.keras.Model):
-            conv = find_last_conv_layer(layer)
-            if conv is not None:
-                return conv
+    if isinstance(model, tf.keras.Model):
+        for layer in reversed(model.layers):
+            if isinstance(layer, tf.keras.Model):
+                conv_layer = find_last_conv_layer(layer)
+                if conv_layer is not None:
+                    return conv_layer
+            elif isinstance(layer, tf.keras.layers.Conv2D):
+                return layer
     return None
+
 
 def make_gradcam_heatmap(img_array, model, pred_index=None):
     last_conv_layer = find_last_conv_layer(model)
-    if last_conv_layer is None:
-        raise ValueError("No Conv2D layer found.")
-
     grad_model = tf.keras.models.Model(
-        inputs=model.inputs,
-        outputs=[last_conv_layer.output, model.output]
-    )
+    inputs=model.inputs,
+    outputs=[last_conv_layer.output, model.output])
+
 
     img_tensor = tf.convert_to_tensor(img_array, dtype=tf.float32)
+    conv_outputs, predictions = grad_model(img_tensor)
 
     with tf.GradientTape() as tape:
         conv_outputs, predictions = grad_model(img_tensor)
