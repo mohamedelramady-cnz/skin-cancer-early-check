@@ -3,14 +3,13 @@ from PIL import Image
 import os
 import gdown
 import tensorflow as tf
-import pandas as pd
-import altair as alt
+import numpy as np
 
 from utils import predict_class, generate_gradcam, CLASS_INDICES
 
-# ---------------------------
-# Download & load model
-# ---------------------------
+# -------------------------------------------------
+# Google Drive model download
+# -------------------------------------------------
 FILE_ID = "1thbvn-z9RqusPlNURPy7rmIRnWM3k3c2"
 MODEL_PATH = "final_resnet_model.keras"
 URL = f"https://drive.google.com/uc?export=download&id={FILE_ID}"
@@ -24,9 +23,9 @@ def load_model():
 
 model = load_model()
 
-# ---------------------------
+# -------------------------------------------------
 # Streamlit UI
-# ---------------------------
+# -------------------------------------------------
 st.title("AI-Based Skin Cancer Diagnosis System")
 st.write("Upload a skin lesion image to get prediction and Grad-CAM visualization.")
 
@@ -36,33 +35,28 @@ if uploaded:
     img = Image.open(uploaded).convert("RGB")
     st.image(img, caption="Input Image", use_column_width=True)
 
-    # Predict first
-    with st.spinner("Predicting class..."):
-        result = predict_class(model, img)
+    with st.spinner("Predicting..."):
+        # Step 1: Predict
+        pred = predict_class(model, img)
 
-    st.write(f"**Prediction:** {result['label']}")
-    st.write(f"**Probability:** {result['probability']:.4f}")
-    st.info(result['report'])
+        # Step 2: Generate Grad-CAM
+        gradcam_img = generate_gradcam(model, img, pred["preprocessed"], pred_idx=pred["pred_index"])
 
-    # Show all class probabilities
-    preds = model.predict(result['preprocessed'])[0]
-    prob_df = pd.DataFrame({
-        "Class": [CLASS_INDICES[i] for i in range(len(preds))],
-        "Probability": preds
-    })
+    # ---------------------------
+    # Display Results
+    # ---------------------------
+    st.subheader("Prediction Report")
+    st.markdown(pred["report"])
 
-    st.subheader("All Class Probabilities")
-    chart = alt.Chart(prob_df).mark_bar().encode(
-        x=alt.X("Class", sort=None),
-        y="Probability",
-        color="Class"
-    )
-    st.altair_chart(chart, use_container_width=True)
+    st.subheader("Grad-CAM Visualization")
+    st.image(gradcam_img, use_column_width=True)
 
-    # Show Grad-CAM button
-    if st.button("Show Grad-CAM"):
-        with st.spinner("Generating Grad-CAM..."):
-            gradcam_img = generate_gradcam(model, img, result['preprocessed'], pred_idx=None)
-        st.subheader("Grad-CAM")
-        st.image(gradcam_img, use_column_width=True)
+    # ---------------------------
+    # Probability Bar Chart
+    # ---------------------------
+    st.subheader("Class Probabilities")
+    probs = model.predict(pred["preprocessed"])[0]
+    class_names = list(CLASS_INDICES.values())
 
+    prob_dict = {name: float(prob) for name, prob in zip(class_names, probs)}
+    st.bar_chart(prob_dict)
