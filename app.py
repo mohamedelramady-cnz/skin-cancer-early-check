@@ -27,7 +27,7 @@ model = load_model()
 # Streamlit UI
 # -------------------------------------------------
 st.title("AI-Based Skin Cancer Diagnosis System")
-st.write("Upload a skin lesion image to get prediction and Grad-CAM visualization.")
+st.write("Upload a skin lesion image to get prediction and optional Grad-CAM visualization.")
 
 uploaded = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
 
@@ -35,12 +35,17 @@ if uploaded:
     img = Image.open(uploaded).convert("RGB")
     st.image(img, caption="Input Image", use_column_width=True)
 
+    # Option for user to generate Grad-CAM
+    generate_gradcam_option = st.checkbox("Generate Grad-CAM visualization?")
+
     with st.spinner("Predicting..."):
         # Step 1: Predict
         pred = predict_class(model, img)
 
-        # Step 2: Generate Grad-CAM
-        gradcam_img = generate_gradcam(model, img, pred["preprocessed"], pred_idx=pred["pred_index"])
+        # Step 2: Grad-CAM (only if checkbox is checked)
+        gradcam_img = None
+        if generate_gradcam_option:
+            gradcam_img = generate_gradcam(model, img, pred["preprocessed"], pred_idx=pred["pred_index"])
 
     # ---------------------------
     # Display Results
@@ -48,8 +53,10 @@ if uploaded:
     st.subheader("Prediction Report")
     st.markdown(pred["report"])
 
-    st.subheader("Grad-CAM Visualization")
-    st.image(gradcam_img, use_column_width=True)
+    # Grad-CAM display
+    if gradcam_img is not None:
+        st.subheader("Grad-CAM Visualization")
+        st.image(gradcam_img, use_column_width=True)
 
     # ---------------------------
     # Probability Bar Chart
