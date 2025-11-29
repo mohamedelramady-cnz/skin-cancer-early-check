@@ -10,7 +10,7 @@ from utils import preprocess, infer_and_gradcam
 # -------------------------------------------------
 # Google Drive model download
 # -------------------------------------------------
-FILE_ID = "YOUR_FILE_ID_HERE"   # <--- REPLACE THIS
+FILE_ID = "1thbvn-z9RqusPlNURPy7rmIRnWM3k3c2"
 MODEL_PATH = "final_resnet_model.keras"
 URL = f"https://drive.google.com/uc?export=download&id={FILE_ID}"
 
