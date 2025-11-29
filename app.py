@@ -3,7 +3,7 @@ from PIL import Image
 import os
 import gdown
 import tensorflow as tf
-from utils import infer_and_integrated_gradients
+from utils import infer_and_gradcam
 
 FILE_ID = "1thbvn-z9RqusPlNURPy7rmIRnWM3k3c2"
 MODEL_PATH = "final_resnet_model.keras"
@@ -24,7 +24,8 @@ if uploaded_file:
     img = Image.open(uploaded_file).convert("RGB")
     st.image(img, caption="Input Image", use_column_width=True)
     with st.spinner("Predicting..."):
-        result = infer_and_integrated_gradients(model, img)
+        result = infer_and_gradcam(model, img)
+
     st.subheader("Prediction Results")
     st.write(f"**Predicted Label:** {result['label']}")
     st.write(f"**Probability:** {result['probability']:.4f}")
